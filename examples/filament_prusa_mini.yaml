@@ -1,0 +1,52 @@
+# Canonical filament targeting a machine PrusaSlicer knows.
+#
+# Its twin, examples/example_mk1.yaml, targets a Bambu Lab P2S and therefore
+# renders to Orca ONLY: most printer models exist in a single catalogue, so a
+# `render --provider prusa` on it refuses by design. This file is the other
+# side of that coin — proof the same canonical format renders to PrusaSlicer.
+#
+#   go run ./cmd/aldina render --provider prusa --kind filament \
+#     --in examples/filament_prusa_mini.yaml --out ./dist
+#
+# It also renders to Orca: the MINI is one of the ~74 models both catalogues
+# carry, under different names (Orca "Prusa MINI"), bridged by
+# internal/catalog/aliases.json.
+kind: filament
+schema_version: 1
+
+meta:
+  name: "Prusament PETG Jet Black"
+  vendor: "Prusa Polymers"
+  material: PETG # rendered PETG by Orca, "PET" by Prusa — vocabulary map
+  color_hex: "1A1A1A" # WITHOUT the '#': providers add it
+  notes: "Dry at 65 °C for 6h if stringing."
+
+physical:
+  diameter_mm: 1.75
+  density_g_cm3: 1.27
+  cost_per_kg: 29.99
+  abrasive: false
+  shrinkage_xy: 0.0 # a RATE: Prusa writes "0%", Orca "100%" — inverted encodings
+
+temps:
+  nozzle: 240
+  nozzle_first_layer: 240
+  bed: 85
+  bed_first_layer: 85
+
+flow:
+  max_volumetric_mm3_s: 8
+  flow_ratio: 1.0
+
+cooling:
+  fan_min: 0.3 # ratio 0–1; both slicers want 0–100
+  fan_max: 0.5
+  fan_off_first_layers: 1
+  slow_down_layer_time_s: 20
+  slow_down_min_speed_mm_s: 15
+  bridges_fan: 1.0
+
+compat: # the MACHINE, never a preset name
+  machines:
+    - model: "Original Prusa MINI & MINI+" # PrusaSlicer's spelling; Orca's works too
+      nozzle_mm: 0.4

@@ -1,0 +1,42 @@
+{
+  "note": [
+    "Equivalence classes between the two slicers' model names. There is no",
+    "canonical spelling to invent: an author writes the name they know, from",
+    "either slicer, and both renders resolve. Curated by hand — a missing entry",
+    "surfaces as a render error naming the model, never as a silent mismatch.",
+    "",
+    "Two families so far. Punctuation and casing (Elegoo Neptune 3 vs",
+    "Neptune-3), and the vendor prefix Orca puts in the model name while Prusa",
+    "leaves it to the vendor file: 'Sovol SV06' vs plain 'SV06'.",
+    "",
+    "Deliberately ABSENT: the Orca models 'Prusa MK4S HF', 'Prusa CORE One HF'",
+    "and 'Prusa CORE One L HF'. Orca models high-flow as a separate machine,",
+    "PrusaSlicer as a nozzle_high_flow flag on the same one. Aliasing them to",
+    "the non-HF model would render a condition that quietly matches the wrong",
+    "hardware; a hard error is the honest answer until the flag is mapped."
+  ],
+  "aliases": [
+    { "orca": "Prusa MINI", "prusa": "Original Prusa MINI & MINI+" },
+    { "orca": "Prusa MINI IS", "prusa": "Original Prusa MINI & MINI+ Input Shaper" },
+    { "orca": "Prusa MK3S", "prusa": "Original Prusa i3 MK3S & MK3S+" },
+    { "orca": "Prusa MK3.5", "prusa": "Original Prusa MK3.5 & MK3.5S" },
+    { "orca": "Prusa MK4", "prusa": "Original Prusa MK4" },
+    { "orca": "Prusa MK4S", "prusa": "Original Prusa MK4S" },
+    { "orca": "Prusa XL", "prusa": "Original Prusa XL" },
+    { "orca": "Prusa XL 5T", "prusa": "Original Prusa XL - 5T" },
+    { "orca": "Prusa CORE One", "prusa": "Prusa CORE One & CORE One+" },
+    { "orca": "Creality Sermoon V1", "prusa": "Creality Sermoon-V1" },
+    { "orca": "FLSun QQ-S Pro", "prusa": "FLSun QQS Pro" },
+    { "orca": "UltiMaker 2", "prusa": "Ultimaker 2" },
+
+    { "orca": "Sovol SV01 Pro", "prusa": "SV01 PRO" },
+    { "orca": "Sovol SV05", "prusa": "SV05" },
+    { "orca": "Sovol SV06", "prusa": "SV06" },
+    { "orca": "Sovol SV06 Plus", "prusa": "SV06 PLUS" },
+    { "orca": "Qidi Q1 Pro", "prusa": "Q1 Pro" },
+    { "orca": "Qidi X-Max 3", "prusa": "X-MAX 3" },
+    { "orca": "Qidi X-Plus 3", "prusa": "X-Plus 3" },
+    { "orca": "Qidi X-Plus 4", "prusa": "X-Plus 4" },
+    { "orca": "Qidi X-Smart 3", "prusa": "X-smart 3" }
+  ]
+}

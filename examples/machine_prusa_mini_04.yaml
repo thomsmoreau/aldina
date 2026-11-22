@@ -1,0 +1,77 @@
+# Canonical machine — Original Prusa MINI+, 0.4 nozzle.
+#
+# The twin of examples/filament_prusa_mini.yaml: both name the SAME linkage key
+# (model + nozzle), so the rendered filament's compatible_printers_condition
+# (printer_model=="MINI" and nozzle_diameter[0]==0.4) matches the printer_model
+# this file renders. That pair is the end-to-end proof:
+#
+#   go run ./cmd/aldina render --provider prusa --kind machine \
+#     --in examples/machine_prusa_mini_04.yaml --out ./dist
+#   go run ./cmd/aldina render --provider prusa --kind filament \
+#     --in examples/filament_prusa_mini.yaml --out ./dist
+#
+# Values read off Prusa's published MINI+ specification. Motion limits are the
+# stock firmware's; adjust to your machine.
+kind: machine
+schema_version: 1
+
+meta:
+  # A human label: the title the rendered preset gets. The LINKAGE key is
+  # (model, nozzle.diameter_mm) — resolved through internal/catalog into the
+  # model ID "MINI" that PrusaSlicer actually compares against.
+  name: "Prusa MINI+ 0.4"
+  vendor: "Prusa Research"
+  model: "Original Prusa MINI & MINI+" # must match the slicer catalogue's model name
+  # Capability keywords. Orca has no consumer and warns; Prusa appends them to
+  # printer_notes, next to the derived PRINTER_VENDOR_/PRINTER_MODEL_ keywords.
+  tags: [PG]
+
+volume:
+  width_mm: 180
+  depth_mm: 180
+  height_mm: 180
+
+nozzle:
+  diameter_mm: 0.4
+  filament_diameter_mm: 1.75
+  min_layer_height_mm: 0.05
+  max_layer_height_mm: 0.25
+  # type/extruder/height_mm/hrc omitted on purpose: real properties of the
+  # hardware, but Orca-only keys — setting them here only produces a warning
+  # on this side (mapping.md §Nozzle).
+
+# Canonical-only (absent from BOTH slicer formats): vendor spec data, consumed
+# by `aldina validate` rather than rendered.
+limits:
+  max_nozzle_temp_c: 280
+  max_bed_temp_c: 100
+  max_volumetric_mm3_s: 15
+
+kinetics:
+  max_speed_mm_s: {x: 180, y: 180, z: 12, e: 80}
+  max_accel_mm_s2: {x: 2500, y: 2500, z: 400, e: 2500}
+  max_jerk_mm_s: {x: 8, y: 8, z: 2, e: 10}
+
+retraction:
+  length_mm: 3.2
+  speed_mm_s: 35
+  deretract_speed_mm_s: 25
+  min_travel_mm: 1.5
+  z_hop_mm: 0.2
+  on_layer_change: true
+  wipe: true
+
+firmware:
+  relative_e: true
+  firmware_retraction: false
+
+features:
+  enclosed: false
+
+gcode:
+  flavor: marlin2
+  # start/end blobs omitted: opaque per-provider blocks (mapping.md pitfall #6)
+
+defaults:
+  print_profile: "0.15mm QUALITY @MINI"
+  filament_profile: "Prusament PLA @MINI"

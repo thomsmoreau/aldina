@@ -1,0 +1,69 @@
+# filament.yaml — Aldina canonical profile
+kind: filament
+schema_version: 0
+
+meta:
+  name: "Overture PETG Rock White"
+  vendor: "Overture"
+  material:
+    PETG # canonical enum: PLA, PETG, ABS, ASA, TPU, PC, PA...
+    # rendered: Orca="PETG", Prusa="PET" (vocabulary mapping)
+  color_hex: "B3B4B2" # WITHOUT the '#' (INI trap, see irregularity #5)
+  notes: "Dry at 60 C for 5 h if stringing."
+
+physical:
+  diameter_mm: 1.75
+  density_g_cm3: 1.27
+  cost_per_kg: 21.99
+  abrasive:
+    false # one concept, two encodings:
+    # Prusa filament_abrasive (bool) / Orca required_nozzle_HRC (hardness)
+
+temps: # °C, float
+  nozzle: 255.0
+  nozzle_first_layer: 257.0
+  nozzle_range: [220.0, 260.0]
+  bed: 80.0
+  bed_first_layer: 80.0
+  softening: 85.0 # vitrification. Orca-only -> drop+warning on the Prusa side
+
+flow:
+  max_volumetric_mm3_s: 25.0
+  flow_ratio: 0.945 # Orca filament_flow_ratio / Prusa extrusion_multiplier
+
+cooling:
+  fan_min: 0.30 # 0-1 ratios
+  fan_max: 0.50
+  fan_off_first_layers: 3
+  full_fan_at_layer: 0
+  slow_down_layer_time_s: 1.0
+  slow_down_min_speed_mm_s: 20.0
+  bridges_fan: 0.80
+
+retraction: # absent / null = inherit from the machine
+  length_mm: 1.4
+  speed_mm_s: null
+  deretract_speed_mm_s: null # Orca filament_deretraction_speed / Prusa filament_deretract_speed (!)
+  z_hop_mm: 0.4
+  wipe: true
+  wipe_distance_mm: 2.0
+
+gcode: # opaque per-provider blocks — never canonized
+  start: "; filament start gcode\n"
+  end: "; filament end gcode\n"
+
+compat: # the MACHINE, never a preset name (that varies from slicer to slicer)
+  machines:
+    - model: "Bambu Lab P2S" # as the slicer's catalogue names it
+      nozzle_mm: 0.6
+      # rendered: Orca  -> compatible_printers ["Bambu Lab P2S 0.6 nozzle"]
+      #           Prusa -> error, its catalogue has no Bambu models (by design)
+
+overrides: # escape hatch for the irreducibles — NOTHING is lost
+  orca:
+    pressure_advance: ["0.014"]
+    adaptive_pressure_advance: ["1"]
+    filament_z_hop_types: ["Spiral Lift", "Spiral Lift"]
+  prusa:
+    filament_ramming_parameters: "120 100 6.6 ..."
+    cooling_slowdown_logic: uniform_cooling

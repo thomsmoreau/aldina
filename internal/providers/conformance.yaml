@@ -1,0 +1,94 @@
+# Aldina — ProfileAsCode for 3D printing.
+# Copyright (C) 2026 Thomas Moreau
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# conformance.yaml — the single source of truth for the cross-provider wire
+# contract. One canonical concept, one authored value, both wire forms.
+#
+# Two consumers, so the human doc and the machine check can never drift:
+#   - the king test harness (conformance_test.go) asserts every case;
+#   - cmd/aldina-mapping regenerates the table section of docs/mapping.md.
+#
+# Conventions:
+#   value: null        → the canonical field stays nil (absence, not zero)
+#   orca:  {key: null} → that wire key MUST be absent
+#   prusa: {key: null} → that INI key MUST be absent
+#   orca key = the wire JSON name (the json: tag); prusa key = the INI name.
+
+filament:
+  - concept: temps.nozzle
+    value: 240.0
+    orca: { nozzle_temperature: ["240"] }
+    prusa: { temperature: "240" }
+
+  - concept: temps.bed
+    note: authored zero is a value, not an absence
+    value: 0.0
+    orca: { hot_plate_temp: ["0"] }
+    prusa: { bed_temperature: "0" }
+
+  - concept: cooling.fan_min
+    note: ratio 0–1 → 0–100 on both sides; the key names swap word order
+    value: 0.3
+    orca: { fan_min_speed: ["30"] }
+    prusa: { min_fan_speed: "30" }
+
+  - concept: cooling.fan_max
+    value: 1.0
+    orca: { fan_max_speed: ["100"] }
+    prusa: { max_fan_speed: "100" }
+
+  - concept: physical.shrinkage_xy
+    note: INVERSE — Orca asks "how big it ends up", Prusa asks "how much it shrinks"
+    value: 0.0
+    orca: { filament_shrink: ["100%"] }
+    prusa: { filament_shrinkage_compensation_xy: "0%" }
+
+  - concept: physical.shrinkage_xy
+    value: 0.02
+    orca: { filament_shrink: ["98%"] }
+    prusa: { filament_shrinkage_compensation_xy: "2%" }
+
+  - concept: physical.shrinkage_xy
+    note: absence stays absence on both sides
+    value: null
+    orca: { filament_shrink: null }
+    prusa: { filament_shrinkage_compensation_xy: null }
+
+  - concept: meta.material
+    note: one material, two vocabularies — PETG is "PETG" at Orca, "PET" at Prusa
+    value: "PETG"
+    orca: { filament_type: ["PETG"] }
+    prusa: { filament_type: "PET" }
+
+  - concept: retraction.length_mm
+    note: nil = inherit from the machine, spelled "nil" by both
+    value: null
+    orca: { filament_retraction_length: ["nil"] }
+    prusa: { filament_retract_length: "nil" }
+
+machine:
+  - concept: nozzle.diameter_mm
+    value: 0.4
+    orca: { nozzle_diameter: ["0.4"] }
+    prusa: { nozzle_diameter: "0.4" }
+
+  - concept: volume.height_mm
+    value: 180.0
+    orca: { printable_height: "180" }
+    prusa: { max_print_height: "180" }
+
+  - concept: nozzle.min_layer_height_mm
+    value: 0.05
+    orca: { min_layer_height: ["0.05"] }
+    prusa: { min_layer_height: "0.05" }
+
+  - concept: nozzle.max_layer_height_mm
+    value: 0.25
+    orca: { max_layer_height: ["0.25"] }
+    prusa: { max_layer_height: "0.25" }
+
+  - concept: retract.speed_mms
+    value: 35.0
+    orca: { retraction_speed: ["35"] }
+    prusa: { retract_speed: "35" }

@@ -1,0 +1,25 @@
+# CI — aldina (GitHub Actions)
+
+name: ci
+
+on:
+  pull_request:
+    branches: [master, dev]
+
+jobs:
+  check:
+    name: Format, Vet, Build, Test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: build
+        run: go build ./...
+      - name: test
+        run: go test ./...

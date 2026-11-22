@@ -1,0 +1,120 @@
+{
+  "name": "Aldina P2S 0.6 root import test",
+  "version": "2.4.0.0",
+  "from": "User",
+  "printer_settings_id": "Aldina P2S 0.6 root import test",
+  "inherits": "",
+  "printer_model": "Bambu Lab P2S",
+  "printer_variant": "0.6",
+  "printable_area": [
+    "0x0",
+    "256x0",
+    "256x256",
+    "0x256"
+  ],
+  "printable_height": "256",
+  "nozzle_diameter": [
+    "0.6"
+  ],
+  "nozzle_type": [
+    "hardened_steel"
+  ],
+  "nozzle_height": "4.2",
+  "extruder_type": [
+    "Direct Drive"
+  ],
+  "min_layer_height": [
+    "0.12"
+  ],
+  "max_layer_height": [
+    "0.42"
+  ],
+  "machine_max_speed_x": [
+    "600",
+    "600"
+  ],
+  "machine_max_speed_y": [
+    "600",
+    "600"
+  ],
+  "machine_max_speed_z": [
+    "20",
+    "20"
+  ],
+  "machine_max_speed_e": [
+    "30",
+    "30"
+  ],
+  "machine_max_acceleration_x": [
+    "20000",
+    "20000"
+  ],
+  "machine_max_acceleration_y": [
+    "20000",
+    "20000"
+  ],
+  "machine_max_acceleration_z": [
+    "500",
+    "500"
+  ],
+  "machine_max_acceleration_e": [
+    "5000",
+    "5000"
+  ],
+  "machine_max_jerk_x": [
+    "9",
+    "9"
+  ],
+  "machine_max_jerk_y": [
+    "9",
+    "9"
+  ],
+  "machine_max_jerk_z": [
+    "3",
+    "3"
+  ],
+  "machine_max_jerk_e": [
+    "2.5",
+    "2.5"
+  ],
+  "machine_min_travel_rate": [
+    "0"
+  ],
+  "machine_min_extruding_rate": [
+    "0"
+  ],
+  "retraction_length": [
+    "1.4"
+  ],
+  "retraction_speed": [
+    "30"
+  ],
+  "deretraction_speed": [
+    "25"
+  ],
+  "retraction_minimum_travel": [
+    "1.5"
+  ],
+  "z_hop": [
+    "0.4"
+  ],
+  "retract_when_changing_layer": [
+    "1"
+  ],
+  "wipe": [
+    "1"
+  ],
+  "use_relative_e_distances": "0",
+  "use_firmware_retraction": "0",
+  "auxiliary_fan": "1",
+  "support_air_filtration": "1",
+  "gcode_flavor": "marlin",
+  "machine_start_gcode": "G90 ; start",
+  "machine_end_gcode": "M400 ; end",
+  "machine_pause_gcode": "M400 U1",
+  "default_filament_profile": [
+    "Bambu PLA Basic @BBL P2S 0.6 nozzle"
+  ],
+  "default_print_profile": "0.30mm Standard @BBL P2S 0.6 nozzle",
+  "printer_notes": "P2S 0.6 hardened, enclosed, aux fan."
+}

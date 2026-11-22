@@ -1,0 +1,19 @@
+{
+  "name": "Bare 0.4",
+  "version": "2.4.0.0",
+  "from": "User",
+  "printer_settings_id": "Bare 0.4",
+  "inherits": "",
+  "printer_model": "Bare",
+  "printer_variant": "0.4",
+  "printable_area": [
+    "0x0",
+    "180x0",
+    "180x180",
+    "0x180"
+  ],
+  "printable_height": "180",
+  "nozzle_diameter": [
+    "0.4"
+  ]
+}

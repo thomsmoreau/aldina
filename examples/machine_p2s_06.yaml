@@ -1,0 +1,68 @@
+# Canonical machine — Bambu Lab P2S, 0.6 nozzle variant.
+# Wire values verified against
+# references/orca/printers/Bambu Lab P2S 0.6 nozzle.json (Orca 2.1.0.16).
+kind: machine
+schema_version: 1
+
+meta:
+  # A human label: the title the rendered preset gets. The LINKAGE key is
+  # (model, nozzle.diameter_mm) — what a filament's compat.machines names.
+  name: "Bambu Lab P2S 0.6"
+  vendor: "Bambu Lab"
+  model: "Bambu Lab P2S" # must match the slicer catalogue's model name
+
+volume:
+  width_mm: 256
+  depth_mm: 256
+  height_mm: 256
+
+nozzle:
+  diameter_mm: 0.6
+  type: hardened_steel
+  extruder: direct_drive
+  filament_diameter_mm: 1.75
+  height_mm: 4.2
+  # hrc omitted: "0" on the real P2S export = unknown (mapping.md, Nozzle table)
+  min_layer_height_mm: 0.12
+  max_layer_height_mm: 0.42
+
+# Canonical-only (absent from both slicer formats): vendor spec data.
+# Filled from Bambu P2S specs — adjust to your machine.
+limits:
+  max_nozzle_temp_c: 300
+  max_bed_temp_c: 100
+  max_volumetric_mm3_s: 24
+
+kinetics:
+  max_speed_mm_s: {x: 600, y: 600, z: 20, e: 30}
+  max_accel_mm_s2: {x: 20000, y: 20000, z: 500, e: 5000}
+  max_jerk_mm_s: {x: 9, y: 9, z: 3, e: 2.5}
+
+retraction:
+  length_mm: 1.4
+  speed_mm_s: 30
+  deretract_speed_mm_s: 30
+  min_travel_mm: 1
+  z_hop_mm: 0.4
+  on_layer_change: true
+  wipe: true
+  wipe_distance_mm: 2
+
+firmware:
+  relative_e: true
+  firmware_retraction: false
+
+features:
+  enclosed: true
+  heated_chamber: false
+  aux_fan: false
+  air_filtration: true
+  plates: [textured_pei]
+
+gcode:
+  flavor: marlin
+  # start/end blobs omitted: opaque per-provider blocks (mapping.md, pitfall #6)
+
+defaults:
+  print_profile: "0.30mm Standard @BBL P2S 0.6 nozzle"
+  filament_profile: "Bambu PLA Basic @BBL P2S 0.6 nozzle"
