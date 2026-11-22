@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/thomsmoreau/Aldina/internal/canonical"
+	"github.com/thomsmoreau/Aldina/internal/providers"
 )
 
 // baseMachine mirrors examples/machine_prusa_mini_04.yaml. Copy and tweak in a
@@ -304,14 +306,17 @@ func TestOrcaOnlyFieldsAreWarned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderMachine: %v", err)
 	}
-	joined := strings.Join(warns, "\n")
+	var paths []string
+	for _, w := range warns {
+		paths = append(paths, w.Path)
+	}
 	for _, want := range []string{
 		"nozzle.type", "nozzle.extruder", "nozzle.height_mm", "nozzle.hrc",
 		"retraction.wipe_distance_mm", "features.aux_fan",
 		"features.air_filtration", "features.heated_chamber",
 	} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("missing warning for %s, got:\n%s", want, joined)
+		if !slices.Contains(paths, want) {
+			t.Errorf("missing warning for %s, got: %v", want, warns)
 		}
 	}
 }
@@ -359,7 +364,7 @@ func TestRenderMachine(t *testing.T) {
 		name      string
 		input     canonical.Machine
 		inherits  string
-		wantWarns []string
+		wantWarns []providers.Warning
 	}{
 		{name: "machine-mini-04", input: baseMachine()},
 		{

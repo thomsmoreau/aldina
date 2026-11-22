@@ -89,7 +89,7 @@ func mapExtruderTypeToOrca(t canonical.ExtruderType) (string, string) {
 	case canonical.Bowden:
 		return "Bowden", ""
 	default:
-		return "", fmt.Sprintf("nozzle.extruder: %q unknown to orca, extruder_type omitted", t)
+		return "", fmt.Sprintf("%q unknown to orca, extruder_type omitted", t)
 	}
 }
 
@@ -104,7 +104,7 @@ func mapExtruderTypeToOrca(t canonical.ExtruderType) (string, string) {
 // NOT warnings: they are the `aldina validate` payload, consumed by CheckCompat
 // — not lost render data (mapping.md, Limits table). Truly inexpressible fields
 // → warnings.
-func RenderMachine(m canonical.Machine, inherits string) (MachineSettings, []string, error) {
+func RenderMachine(m canonical.Machine, inherits string) (MachineSettings, []providers.Warning, error) {
 	// Canonical fields Orca cannot import without (see required.go).
 	// Everything else degrades to warnings + omitted keys.
 	if err := providers.MissingError(machineKind, requiredMachine(m)); err != nil {
@@ -115,21 +115,21 @@ func RenderMachine(m canonical.Machine, inherits string) (MachineSettings, []str
 		return MachineSettings{}, nil, fmt.Errorf("inherits: must differ from meta.name to avoid a self-referential orca preset")
 	}
 
-	var warns []string
+	var warns []providers.Warning
 
 	var extruderType string
 	if m.Nozzle.Extruder != nil { // absent → omit, not a warning
-		var warn string
-		extruderType, warn = mapExtruderTypeToOrca(*m.Nozzle.Extruder)
-		if warn != "" {
-			warns = append(warns, warn)
+		var loss string
+		extruderType, loss = mapExtruderTypeToOrca(*m.Nozzle.Extruder)
+		if loss != "" {
+			warns = append(warns, providers.Warning{Path: "nozzle.extruder", Message: loss})
 		}
 	}
 	if m.Features.HeatedChamber != nil {
-		warns = append(warns, "features.heated_chamber: no orca machine field, dropped")
+		warns = append(warns, providers.Warning{Path: "features.heated_chamber", Message: "no orca machine field, dropped"})
 	}
 	if len(m.Meta.Tags) > 0 {
-		warns = append(warns, "meta.tags: no orca consumer, dropped (prusa renders them into printer_notes)")
+		warns = append(warns, providers.Warning{Path: "meta.tags", Message: "no orca consumer, dropped (prusa renders them into printer_notes)"})
 	}
 
 	out := MachineSettings{

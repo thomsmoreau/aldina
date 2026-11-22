@@ -9,10 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/thomsmoreau/Aldina/internal/canonical"
+	"github.com/thomsmoreau/Aldina/internal/providers"
 )
 
 var update = flag.Bool("update", false, "regenerate golden files")
@@ -254,11 +256,42 @@ func TestLossesAreWarned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderFilament: %v", err)
 	}
-	joined := strings.Join(warns, "\n")
+	var paths []string
+	for _, w := range warns {
+		paths = append(paths, w.Path)
+	}
 	for _, want := range []string{"temps.nozzle_range", "temps.softening", "retraction.wipe_distance_mm"} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("missing warning for %s, got:\n%s", want, joined)
+		if !slices.Contains(paths, want) {
+			t.Errorf("missing warning for %s, got: %v", want, warns)
 		}
+	}
+}
+
+// overrides.orca never reaches a Prusa file, so Prusa's ingest cannot read it
+// back: it must warn on its exact path, and only when set (ADR-0004).
+func TestOrcaOverridesAreWarned(t *testing.T) {
+	cases := []struct {
+		name      string
+		overrides map[string]map[string]any
+		wantWarn  bool
+	}{
+		{"set", map[string]map[string]any{"orca": {"filament_id": "GFL99"}}, true},
+		{"empty", map[string]map[string]any{"orca": {}}, false},
+		{"nil", nil, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := baseFilament()
+			f.Overrides = c.overrides
+			_, warns, err := RenderFilament(f)
+			if err != nil {
+				t.Fatalf("RenderFilament: %v", err)
+			}
+			got := slices.ContainsFunc(warns, func(w providers.Warning) bool { return w.Path == "overrides.orca" })
+			if got != c.wantWarn {
+				t.Errorf("warning on overrides.orca = %v, want %v (warnings: %v)", got, c.wantWarn, warns)
+			}
+		})
 	}
 }
 

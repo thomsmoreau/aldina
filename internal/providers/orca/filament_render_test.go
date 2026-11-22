@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/thomsmoreau/Aldina/internal/canonical"
+	"github.com/thomsmoreau/Aldina/internal/providers"
 )
 
 var update = flag.Bool("update", false, "regenerate golden files")
@@ -136,7 +137,7 @@ func TestMapMaterialToOrca(t *testing.T) {
 	}{
 		{canonical.PLA, "PLA", ""},
 		{canonical.PETG, "PETG", ""},
-		{canonical.PHA, "PLA", "meta.material: PHA unsupported by orca, rendered as PLA"},
+		{canonical.PHA, "PLA", "PHA unsupported by orca, rendered as PLA"},
 		{canonical.ABS, "ABS", ""},
 	}
 	for _, c := range cases {
@@ -320,12 +321,48 @@ func TestRenderFilamentMaterialOmitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderFilament error: %v", err)
 	}
-	wantWarn := "meta.material: absent, filament_type omitted (slicer default applies)"
+	wantWarn := providers.Warning{Path: "meta.material", Message: "absent, filament_type omitted (slicer default applies)"}
 	if !slices.Contains(warns, wantWarn) {
-		t.Errorf("warnings = %v, want to contain %q", warns, wantWarn)
+		t.Errorf("warnings = %v, want to contain %v", warns, wantWarn)
 	}
 	if got.FilamentIdentity.FilamentType != nil {
 		t.Errorf("FilamentType = %v, want nil when material absent", got.FilamentIdentity.FilamentType)
+	}
+}
+
+// A value Orca's own ingest cannot read back identically must warn on its
+// exact canonical path, and only when the field is set (ADR-0004).
+func TestRenderFilamentDeclaresLosses(t *testing.T) {
+	cases := []struct {
+		name     string
+		edit     func(*canonical.Filament)
+		path     string
+		wantWarn bool
+	}{
+		{"abrasive false", func(f *canonical.Filament) { f.Physical.Abrasive = new(false) }, "physical.abrasive", true},
+		{"abrasive true", func(f *canonical.Filament) { f.Physical.Abrasive = new(true) }, "physical.abrasive", false},
+		{"abrasive nil", func(f *canonical.Filament) { f.Physical.Abrasive = nil }, "physical.abrasive", false},
+		{"overrides.prusa set", func(f *canonical.Filament) {
+			f.Overrides = map[string]map[string]any{"prusa": {"filament_type": "FLEX"}}
+		}, "overrides.prusa", true},
+		{"overrides.prusa empty", func(f *canonical.Filament) {
+			f.Overrides = map[string]map[string]any{"prusa": {}}
+		}, "overrides.prusa", false},
+		{"overrides nil", func(f *canonical.Filament) { f.Overrides = nil }, "overrides.prusa", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := baseFilament()
+			c.edit(&f)
+			_, warns, err := RenderFilament(f, p2s06)
+			if err != nil {
+				t.Fatalf("RenderFilament: %v", err)
+			}
+			got := slices.ContainsFunc(warns, func(w providers.Warning) bool { return w.Path == c.path })
+			if got != c.wantWarn {
+				t.Errorf("warning on %s = %v, want %v (warnings: %v)", c.path, got, c.wantWarn, warns)
+			}
+		})
 	}
 }
 
@@ -358,7 +395,7 @@ func TestRenderFilament(t *testing.T) {
 		name      string
 		input     canonical.Filament
 		target    canonical.MachineRef
-		wantWarns []string
+		wantWarns []providers.Warning
 	}{
 		{
 			name:   "pla-full",
@@ -396,7 +433,7 @@ func TestRenderFilament(t *testing.T) {
 				return f
 			}(),
 			target:    p2s06,
-			wantWarns: []string{"meta.material: PHA unsupported by orca, rendered as PLA"},
+			wantWarns: []providers.Warning{{Path: "meta.material", Message: "PHA unsupported by orca, rendered as PLA"}},
 		},
 	}
 

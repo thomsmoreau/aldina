@@ -92,6 +92,48 @@ per-extruder. v0 renders the detached form.
 | `meta.notes`    | `filament_notes`                               | `filament_notes` (quoted, `\n` escaped)    | rename                               |
 | `compat.machines[]` | `compatible_printers` (exact preset names)  | `compatible_printers_condition` (expression) | NOT isomorphic — pitfall #13       |
 
+**Orca ingest of compat.** Ingest reads each `compatible_printers` name as a
+catalogue preset. If the catalogue does not have the name, ingest reads it as
+a `<model> <nozzle>` self-link. Two names that the catalogue and its alias
+table give as one machine become one `compat.machines` entry. That entry uses
+the self-link spelling, because the self-link is the author's text. Example:
+`Prusa MINI 0.4 nozzle` and `Original Prusa MINI & MINI+ 0.4` give one entry,
+`Original Prusa MINI & MINI+` 0.4. A preset without a self-link keeps the Orca
+spelling (`Prusa MINI`). If the catalogue cannot find a self-link machine,
+ingest keeps the self-link as written.
+
+**Prusa ingest of compat.** `compatible_printers` names resolve back to
+`compat.machines` through the prusa catalogue (`catalog.LookupPreset`); a name
+the snapshot does not know is reported lost-identity. The two condition
+expressions (`compatible_printers_condition`, `compatible_prints_condition`)
+are never parsed: lost-identity, raw rule kept in `overrides.prusa`.
+`compatible_prints` names print presets, which canonical does not model:
+lost-identity.
+
+**Prusa `filament_type` vocabulary, both directions.** PrusaSlicer 2.9.4
+defines `filament_type` as `coStrings` with an open select (`PrintConfig.cpp`):
+the list below is a suggestion, and a user can type any value. One table
+(`prusa/material.go`) serves render and ingest, so a name never exists in one
+direction only.
+
+| canonical | render writes | ingest reads                  |
+| --------- | ------------- | ----------------------------- |
+| `PLA`     | `PLA`         | `PLA`                         |
+| `PETG`    | **`PET`**     | `PET`, `PETG`                 |
+| `ABS`     | `ABS`         | `ABS`                         |
+| `ASA`     | `ASA`         | `ASA`                         |
+| `TPU`     | **`FLEX`**    | `FLEX`, `TPU`                 |
+| `PC`      | `PC`          | `PC`                          |
+| `PA`      | `PA`          | `PA`, **`NYLON`**             |
+| `PHA`     | `PLA` + warning | `PHA`                       |
+
+On ingest, a canonical name typed into the open select passes through. A
+`;`-joined value (one type per extruder) keeps the first, reported as
+translated-with-approximation. A name with no canonical home (`HIPS`, `EDGE`,
+`NGEN`, `PVA`, `PP`, `PEI`, `PEEK`, `PEKK`, `POM`, `PSU`, `PVDF`, `SCAFF`, a
+typed CF variant) gives `meta.material` = ∅, an approximation issue, and the
+raw value in `overrides.prusa.filament_type`.
+
 ### Physical
 
 | canonical               | OrcaSlicer                | PrusaSlicer                            | tag                       |
@@ -99,9 +141,9 @@ per-extruder. v0 renders the detached form.
 | `physical.diameter_mm`  | `filament_diameter`       | `filament_diameter`                    | 1:1                       |
 | `physical.density_g_cm3` | `filament_density`       | `filament_density`                     | 1:1                       |
 | `physical.cost_per_kg`  | `filament_cost`           | `filament_cost`                        | 1:1                       |
-| `physical.abrasive`     | `required_nozzle_HRC` = `"55"` | `filament_abrasive` = `"1"`       | 1:N — hardness vs boolean |
+| `physical.abrasive`     | `required_nozzle_HRC` = `"40"` (false → omitted, warned) | `filament_abrasive` = `"1"` | 1:N — hardness vs boolean |
 | `physical.shrinkage_xy` | `filament_shrink` = `"100%"` | `filament_shrinkage_compensation_xy` = `"0%"` | **inverted — pitfall #14** |
-| `physical.shrinkage_z`  | — (not rendered v0)       | `filament_shrinkage_compensation_z`    | Prusa-only                |
+| `physical.shrinkage_z`  | `filament_shrinkage_compensation_z` = `"100%"` | `filament_shrinkage_compensation_z` = `"0%"` | **inverted — pitfall #14** |
 
 ### Temperatures
 
@@ -133,6 +175,11 @@ per-extruder. v0 renders the detached form.
 The `"nil"` string idiom is **identical on both sides** — the one place the two
 formats agree exactly. Verified: Orca `filament_retraction_length: ["nil"]`,
 Prusa `filament_retract_length = nil`.
+
+On ingest, one function reads this token for the two providers:
+`providers.ParseFloat` (and `ParsePercent`, `ParseInt`, `ParseBool`) in
+`internal/providers/convert.go`. Each provider removes its array or list
+first. On render, each provider decides which keys write `"nil"`.
 
 | canonical                        | OrcaSlicer                    | PrusaSlicer                 | tag         |
 | -------------------------------- | ----------------------------- | --------------------------- | ----------- |
@@ -242,6 +289,15 @@ Orca asks "how big should it end up", Prusa asks "how much does it shrink".
 A naive copy between the two turns a neutral profile into a 100 % error. This
 is the main case for the value round-trip test (CONTRIBUTING.md, "the king
 test"). No single-provider test can catch it.
+
+`physical.shrinkage_z` is the same split under ONE key name:
+`filament_shrinkage_compensation_z` is a size ratio in Orca (default `100%`,
+range 50–150) and a rate in Prusa (default `0%`, range −10–10) — PrintConfig.cpp
+of each slicer. A key-name match is not a meaning match.
+
+All four keys are float percents (`coPercents`): a rate renders with every
+digit it carries (`0.015` → `"1.5%"` / `"98.5%"`), never rounded to a whole
+percent.
 
 ## Machine resource (v0)
 

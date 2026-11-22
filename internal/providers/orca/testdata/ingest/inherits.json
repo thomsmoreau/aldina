@@ -1,0 +1,18 @@
+{
+	"compatible_printers": [
+		"Bambu Lab P2S 0.6 nozzle"
+	],
+	"filament_extruder_variant": [
+		"Direct Drive Standard"
+	],
+	"filament_settings_id": [
+		"Elegoo PLA @System - Copy"
+	],
+	"from": "User",
+	"inherits": "Elegoo PLA @System",
+	"name": "Elegoo PLA @System - Copy",
+	"slow_down_layer_time": [
+		"1"
+	],
+	"version": "2.4.0.0"
+}

@@ -135,7 +135,7 @@ func printerNotes(m canonical.Machine, modelID string) string {
 // Canonical-only fields (limits.*, features.enclosed/plates,
 // nozzle.filament_diameter_mm) are NOT warnings: they feed `aldina validate`
 // and CheckCompat, not slicer files. Fields Prusa genuinely cannot express are.
-func RenderMachine(m canonical.Machine, inherits string) (MachineSettings, []string, error) {
+func RenderMachine(m canonical.Machine, inherits string) (MachineSettings, []providers.Warning, error) {
 	if err := providers.MissingError(machineKind, requiredMachine(m)); err != nil {
 		return MachineSettings{}, nil, err
 	}
@@ -149,7 +149,7 @@ func RenderMachine(m canonical.Machine, inherits string) (MachineSettings, []str
 		return MachineSettings{}, nil, fmt.Errorf("meta.model: %w", err)
 	}
 
-	var warns []string
+	var warns []providers.Warning
 	// Orca-only machine properties (mapping.md §Nozzle, §Retraction,
 	// §Features). Real hardware facts the canonical is right to carry — Prusa
 	// simply has no key for them, so they are announced, never dropped mute.
@@ -167,7 +167,7 @@ func RenderMachine(m canonical.Machine, inherits string) (MachineSettings, []str
 		{m.Features.HeatedChamber != nil, "features.heated_chamber"},
 	} {
 		if drop.present {
-			warns = append(warns, drop.field+": no prusa machine field, dropped")
+			warns = append(warns, providers.Warning{Path: drop.field, Message: "no prusa machine field, dropped"})
 		}
 	}
 

@@ -45,6 +45,15 @@ func runValidate(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, "compatibility: OK")
+	// A compat warning is degraded compatibility (flow capped, wrong target):
+	// a bare OK next to it would say the opposite.
+	switch len(warnings) {
+	case 0:
+		fmt.Fprintln(stdout, "compatibility: OK")
+	case 1:
+		fmt.Fprintln(stdout, "compatibility: OK (1 warning)")
+	default:
+		fmt.Fprintf(stdout, "compatibility: OK (%d warnings)\n", len(warnings))
+	}
 	return nil
 }

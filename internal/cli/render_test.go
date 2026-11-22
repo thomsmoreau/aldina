@@ -94,12 +94,50 @@ compat:
       nozzle_mm: 0.6
 `)
 	var stdout, stderr bytes.Buffer
-	err := Run([]string{"render", "--kind", "filament", "--in", input, "--out", t.TempDir()}, &stdout, &stderr)
+	outDir := t.TempDir()
+	err := Run([]string{"render", "--kind", "filament", "--in", input, "--out", outDir}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "duplicate machine") {
 		t.Fatalf("run render error = %v, want a duplicate machine error", err)
 	}
 	if want := "Bambu Lab P2S 0.6"; !strings.Contains(err.Error(), want) {
 		t.Errorf("error = %q, want it to name the machine as %q", err, want)
+	}
+	assertEmptyDir(t, outDir)
+}
+
+// A target that fails to render must not leave the targets before it on
+// disk: a re-run after the fix would otherwise mix presets from two inputs.
+func TestRenderFilamentWritesNothingWhenATargetFails(t *testing.T) {
+	input := writeFixture(t, "filament.yaml", `kind: filament
+schema_version: 1
+meta:
+  name: Test PETG
+compat:
+  machines:
+    - model: Bambu Lab P2S
+      nozzle_mm: 0.4
+    - model: No Such Printer
+      nozzle_mm: 0.4
+`)
+	var stdout, stderr bytes.Buffer
+	outDir := t.TempDir()
+	if err := Run([]string{"render", "--kind", "filament", "--in", input, "--out", outDir}, &stdout, &stderr); err == nil {
+		t.Fatal("run render error = nil, want the unknown machine to fail")
+	}
+	assertEmptyDir(t, outDir)
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want no path reported", stdout.String())
+	}
+}
+
+func assertEmptyDir(t *testing.T, dir string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	for _, e := range entries {
+		t.Errorf("%s holds %q, want nothing written", dir, e.Name())
 	}
 }
 
@@ -290,5 +328,15 @@ func TestRenderUnknownProviderStillRejected(t *testing.T) {
 	err := Run([]string{"render", "--provider", "cura", "--kind", "filament", "--in", input, "--out", t.TempDir()}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "unsupported provider") {
 		t.Errorf("error = %v, want unsupported provider", err)
+	}
+}
+
+// An unknown kind is the real mistake, so it must be the error reported, not
+// the --inherits constraint that only follows from it.
+func TestRenderReportsUnknownKindFirst(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := Run([]string{"render", "--kind", "bogus", "--inherits", "Parent", "--in", "x.yaml", "--out", t.TempDir()}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), `unsupported kind "bogus"`) {
+		t.Errorf("error = %v, want the unknown kind reported", err)
 	}
 }

@@ -4,7 +4,8 @@ One canonical 3D-printing profile, rendered to each slicer's native format.
 
 Aldina is a Go CLI that reads a slicer-independent YAML description of a
 filament or a machine and writes the corresponding preset for OrcaSlicer or
-PrusaSlicer.
+PrusaSlicer. It also reads an OrcaSlicer filament preset back into canonical
+form (`ingest`).
 
 ## The problem
 
@@ -72,6 +73,12 @@ product.
   the GUI of both — OrcaSlicer 2.4.2 and PrusaSlicer 2.9.6 — with every
   authored value preserved. The filament self-links to an imported machine
   through `compatible_printers`. Procedure: `docs/import-test.md`.
+- `ingest` for OrcaSlicer filaments: reads an Orca filament JSON export into
+  canonical YAML plus a loss report. Every source key is either mapped or
+  classified into a loss bucket (translated, translated-with-approximation,
+  lost-identity, lost-gcode, lost-fan-out, lost-engine-knob) — never dropped
+  silently. A file with a non-empty `inherits` is refused, not misread.
+  Scope: `docs/adr/0001-ingest-scope-intent-only.md`.
 
 **Caveats — read before relying on it**
 
@@ -91,16 +98,23 @@ product.
   real spelling (`PRUSA3D`) is not derivable from a vendor name, so Aldina
   derives an approximation. Filaments Aldina renders are unaffected: they bind
   on `printer_model`, which is catalogue-resolved.
+- Ingest is intent-only by design: engine knobs never transfer, and about 24 of
+  a real export's ~130 keys map to canonical. The rest are reported in loss
+  buckets — the report is the feature, read it before relying on the output.
 
 **Not started**
 
-The `process` resource (layer heights, speeds, infill, supports) and the import
-direction — parsing an existing slicer profile back into canonical form, along
-with `inherits` resolution. Authoring is the whole of the current scope.
+The `process` resource (layer heights, speeds, infill, supports). In the import
+direction, `ingest` is Orca-filament-only: Prusa ingest, machine ingest, and
+`inherits` resolution remain — a file with a non-empty `inherits` is refused
+for now, not resolved.
 
 ## Install
 
 Requires Go 1.26 or later.
+
+`ingest` is on `main` and not yet released: `@latest` pins to v0.1.0. To use
+`ingest`, build from a clone.
 
 ```bash
 go install github.com/thomsmoreau/Aldina/cmd/aldina@latest
@@ -176,6 +190,27 @@ aldina validate --machine examples/machine_p2s_06.yaml \
 
 Exit status is non-zero for an incompatible combination.
 
+### ingest
+
+Reads a slicer filament file back into canonical YAML, printing a loss report
+to stderr. It is a two-step scaffold, not a live provider-to-provider pipeline:
+edit the emitted YAML, then render it.
+
+```bash
+aldina ingest --provider orca --kind filament --in EXPORT.json --out DIR
+aldina ingest --provider prusa --kind filament --in BUNDLE.ini --out DIR
+```
+
+An OrcaSlicer export holds one preset and gives one YAML. A PrusaSlicer config
+bundle (File → Export Config Bundle) gives one YAML per `[filament:NAME]`
+section, named after the section, and one report per preset. A headerless
+PrusaSlicer export is refused.
+
+A preset with a non-empty `inherits` is refused. In a PrusaSlicer bundle, the
+refusal applies to that preset only: the command writes the other presets, then
+exits non-zero. Anything the canonical format cannot express is reported in a
+loss bucket, never dropped silently.
+
 ### Refreshing the machine catalogue
 
 `aldina-catalog` is a maintenance tool, run by hand and committed like a golden
@@ -193,6 +228,9 @@ profiles. It is the central artefact of the project: a field is documented
 there before it is implemented.
 
 `examples/` holds canonical profiles you can render as-is.
+
+`docs/adr/` records decisions — `0001-ingest-scope-intent-only.md` defines the
+ingest scope. `CHANGELOG.md` lists released and unreleased changes.
 
 ## Contributing
 

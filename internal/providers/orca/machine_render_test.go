@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/thomsmoreau/Aldina/internal/canonical"
+	"github.com/thomsmoreau/Aldina/internal/providers"
 )
 
 func floatP(v float64) *float64 { return &v }
@@ -176,14 +177,14 @@ func TestRenderMachine(t *testing.T) {
 		name      string
 		input     canonical.Machine
 		inherits  string
-		wantWarns []string
+		wantWarns []providers.Warning
 	}{
 		{
 			name:  "machine-p2s-06",
 			input: baseMachine(),
 			// heated_chamber has no Orca field; limits/enclosed/plates are
 			// the validate payload, not render data — no warning for them.
-			wantWarns: []string{"features.heated_chamber: no orca machine field, dropped"},
+			wantWarns: []providers.Warning{{Path: "features.heated_chamber", Message: "no orca machine field, dropped"}},
 		},
 		{
 			name: "machine-import-root",
@@ -193,7 +194,7 @@ func TestRenderMachine(t *testing.T) {
 				return m
 			}(),
 			inherits:  "",
-			wantWarns: []string{"features.heated_chamber: no orca machine field, dropped"},
+			wantWarns: []providers.Warning{{Path: "features.heated_chamber", Message: "no orca machine field, dropped"}},
 		},
 		{
 			name: "machine-import-derived",
@@ -203,7 +204,7 @@ func TestRenderMachine(t *testing.T) {
 				return m
 			}(),
 			inherits:  "Bambu Lab P2S 0.6 nozzle",
-			wantWarns: []string{"features.heated_chamber: no orca machine field, dropped"},
+			wantWarns: []providers.Warning{{Path: "features.heated_chamber", Message: "no orca machine field, dropped"}},
 		},
 		{
 			name: "machine-minimal",
@@ -223,7 +224,7 @@ func TestRenderMachine(t *testing.T) {
 				m.Features.HeatedChamber = nil
 				return m
 			}(),
-			wantWarns: []string{"meta.tags: no orca consumer, dropped (prusa renders them into printer_notes)"},
+			wantWarns: []providers.Warning{{Path: "meta.tags", Message: "no orca consumer, dropped (prusa renders them into printer_notes)"}},
 		},
 	}
 

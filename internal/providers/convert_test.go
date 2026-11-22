@@ -32,6 +32,31 @@ func TestFormatFloat(t *testing.T) {
 	}
 }
 
+// Float-percent keys keep every digit the ratio carries, and none of the
+// float noise a plain r*100 adds.
+func TestRatioToExactPercent(t *testing.T) {
+	cases := []struct {
+		name string
+		in   float64
+		want string
+	}{
+		{"zero", 0.0, "0"},
+		{"whole", 0.02, "2"},
+		{"float noise on x100", 0.07, "7"}, // 0.07*100 = 7.000000000000001
+		{"fraction kept", 0.015, "1.5"},
+		{"sub-percent kept", 0.007, "0.7"},
+		{"tiny ratio, exponent form", 0.00001, "0.001"},
+		{"negative", -0.005, "-0.5"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := RatioToExactPercent(c.in); got != c.want {
+				t.Errorf("RatioToExactPercent(%v) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
 func TestRatioToPercent(t *testing.T) {
 	cases := []struct {
 		name string
@@ -107,5 +132,108 @@ func TestScalarFloatPtrCollapsesAbsence(t *testing.T) {
 	val := 220.0
 	if got := ScalarFloatPtr(&val); got != "220" {
 		t.Errorf("ScalarFloatPtr(&220) = %q, want \"220\"", got)
+	}
+}
+
+// The ingest parsers read one wire scalar back. "" (absent) and "nil"
+// (inherit) both map to canonical absent, and so does an unparseable value:
+// the report surfaces it, the parse never fails a whole file.
+func TestParseFloat(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want *float64
+	}{
+		{"integer", "220", new(220.0)},
+		{"decimal", "0.945", new(0.945)},
+		{"authored zero is not absent", "0", new(0.0)},
+		{"negative", "-1", new(-1.0)},
+		{"inherit token", "nil", nil},
+		{"empty", "", nil},
+		{"unparseable", "abc", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assertPtr(t, "ParseFloat", c.in, ParseFloat(c.in), c.want)
+		})
+	}
+}
+
+// A fractional percent stays exact: "0.7"/100 in float64 is
+// 0.006999999999999999 — the drift orca used to carry.
+func TestParsePercent(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want *float64
+	}{
+		{"whole", "30", new(0.3)},
+		{"zero", "0", new(0.0)},
+		{"full", "100", new(1.0)},
+		{"sub-percent exact", "0.7", new(0.007)},
+		{"fraction exact", "33.3", new(0.333)},
+		{"negative", "-20", new(-0.2)},
+		{"suffixed is not the bare wire", "70%", nil},
+		{"inherit token", "nil", nil},
+		{"empty", "", nil},
+		{"unparseable", "abc", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assertPtr(t, "ParsePercent", c.in, ParsePercent(c.in), c.want)
+		})
+	}
+}
+
+// Layer counts are strict integers: a fractional value is unparseable, never
+// truncated into a different layer.
+func TestParseInt(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want *int
+	}{
+		{"layer count", "3", new(3)},
+		{"authored zero is not absent", "0", new(0)},
+		{"negative", "-1", new(-1)},
+		{"fractional is not truncated", "2.5", nil},
+		{"unparseable", "abc", nil},
+		{"inherit token", "nil", nil},
+		{"empty", "", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assertPtr(t, "ParseInt", c.in, ParseInt(c.in), c.want)
+		})
+	}
+}
+
+func TestParseBool(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want *bool
+	}{
+		{"one", "1", new(true)},
+		{"zero is an authored false", "0", new(false)},
+		{"word form is not the wire", "true", nil},
+		{"inherit token", "nil", nil},
+		{"empty", "", nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assertPtr(t, "ParseBool", c.in, ParseBool(c.in), c.want)
+		})
+	}
+}
+
+func assertPtr[T comparable](t *testing.T, fn, in string, got, want *T) {
+	t.Helper()
+	switch {
+	case got == nil && want == nil:
+	case got == nil || want == nil:
+		t.Errorf("%s(%q) = %v, want %v", fn, in, got, want)
+	case *got != *want:
+		t.Errorf("%s(%q) = %v, want %v", fn, in, *got, *want)
 	}
 }

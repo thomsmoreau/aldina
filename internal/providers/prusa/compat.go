@@ -75,3 +75,33 @@ func compatClause(ref canonical.MachineRef) (string, error) {
 	return fmt.Sprintf("printer_model==%q and nozzle_diameter[0]==%s",
 		machine.ModelID, providers.FormatFloat(machine.Nozzle)), nil
 }
+
+// parseCompatMachines reads the plain compatible_printers list back to
+// canonical machine references, deduplicated, through the prusa catalogue.
+// Render never writes this list (it binds by condition), so there is no
+// self-link form to parse — the orca side's second resolver has no twin here.
+// A name the snapshot does not know is a loss, surfaced, never dropped.
+func parseCompatMachines(names []string) ([]canonical.MachineRef, []IngestIssue) {
+	var refs []canonical.MachineRef
+	var issues []IngestIssue
+	seen := make(map[canonical.MachineRef]bool)
+	for _, name := range names {
+		m, ok := catalog.LookupPreset(catalog.Prusa, name)
+		if !ok {
+			issues = append(issues, IngestIssue{
+				Bucket: BucketLostIdentity,
+				Key:    "compatible_printers",
+				Value:  name,
+				Note:   "preset not in the catalogue snapshot",
+			})
+			continue
+		}
+		ref := canonical.MachineRef{Model: m.Model, NozzleMM: m.Nozzle}
+		if seen[ref] {
+			continue
+		}
+		seen[ref] = true
+		refs = append(refs, ref)
+	}
+	return refs, issues
+}

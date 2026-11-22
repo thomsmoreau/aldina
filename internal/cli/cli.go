@@ -8,6 +8,7 @@ package cli
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 )
@@ -19,15 +20,26 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return errors.New("command required")
 	}
 
+	var err error
 	switch args[0] {
+	case "help", "-h", "--help":
+		printUsage(stdout)
 	case "render":
-		return runRender(args[1:], stdout, stderr)
+		err = runRender(args[1:], stdout, stderr)
 	case "validate":
-		return runValidate(args[1:], stdout, stderr)
+		err = runValidate(args[1:], stdout, stderr)
+	case "ingest":
+		err = runIngest(args[1:], stdout, stderr)
 	default:
 		printUsage(stderr)
-		return fmt.Errorf("unknown command %q", args[0])
+		err = fmt.Errorf("unknown command %q", args[0])
 	}
+	// A subcommand's -h returns flag.ErrHelp after its FlagSet printed the
+	// usage: a success, caught once here rather than in every subcommand.
+	if errors.Is(err, flag.ErrHelp) {
+		return nil
+	}
+	return err
 }
 
 func printUsage(w io.Writer) {
@@ -37,4 +49,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  aldina render --provider prusa --kind filament --in FILAMENT.yaml --out DIR")
 	fmt.Fprintln(w, "  aldina render --provider prusa --kind machine --in MACHINE.yaml --out DIR [--inherits PARENT]")
 	fmt.Fprintln(w, "  aldina validate --machine MACHINE.yaml --filament FILAMENT.yaml")
+	fmt.Fprintln(w, "  aldina ingest --provider orca --kind filament --in EXPORT.json --out DIR")
+	fmt.Fprintln(w, "  aldina ingest --provider prusa --kind filament --in BUNDLE.ini --out DIR")
 }

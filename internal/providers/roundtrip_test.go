@@ -229,3 +229,270 @@ func TestOrcaMachineModelIsNotCatalogueResolved(t *testing.T) {
 		t.Errorf("prusa printer_model = %q, want the catalogue id", prusaMachineINI["printer_model"])
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Migration: prusa → canonical → orca
+// ---------------------------------------------------------------------------
+
+// The migration direction of the king test: values authored in PrusaSlicer,
+// read by prusa.Ingest and rendered by orca, must land with the same number
+// on the Orca side. Values are distinct per key, so a crossed wire (first
+// layer into the base field, bed into nozzle) cannot pass by coincidence, and
+// a decimal flow ratio catches any formatting drift.
+func TestPrusaIngestRendersToOrca(t *testing.T) {
+	bundle := "[filament:Migrated]\n" +
+		"filament_type = PET\n" +
+		"temperature = 235\n" +
+		"first_layer_temperature = 240\n" +
+		"bed_temperature = 85\n" +
+		"first_layer_bed_temperature = 90\n" +
+		"extrusion_multiplier = 0.95\n" +
+		"filament_max_volumetric_speed = 11.5\n" +
+		"filament_diameter = 2.85\n" +
+		"filament_density = 1.24\n" +
+		"filament_cost = 27.5\n" +
+		"filament_abrasive = 1\n" +
+		"filament_shrinkage_compensation_z = 2%\n" +
+		"min_fan_speed = 35\n" +
+		"max_fan_speed = 90\n" +
+		"bridge_fan_speed = 65\n" +
+		"disable_fan_first_layers = 2\n" +
+		"full_fan_speed_layer = 4\n" +
+		"slowdown_below_layer_time = 12.5\n" +
+		"min_print_speed = 17\n" +
+		"filament_wipe = 0\n" +
+		"filament_vendor = Forward AM\n" +
+		"filament_colour = #F7F7F7\n" +
+		"filament_notes = \"Line one\\nLine two\"\n" +
+		"start_filament_gcode = \"M900 K{if nozzle_diameter[0]==0.6}0.12{else}0.2{endif}\\nM572 S0.36\"\n" +
+		"end_filament_gcode = \"; Filament-specific end gcode\"\n"
+	results, err := prusa.Ingest([]byte(bundle))
+	if err != nil || len(results) != 1 || results[0].Err != nil {
+		t.Fatalf("prusa.Ingest: err=%v results=%+v", err, results)
+	}
+	o, _, err := orca.RenderFilament(*results[0].Filament, mini)
+	if err != nil {
+		t.Fatalf("orca.RenderFilament: %v", err)
+	}
+
+	for _, c := range []struct {
+		key  string
+		got  []string
+		want string
+	}{
+		{"filament_type", o.FilamentType, "PETG"}, // one material, two vocabularies
+		{"nozzle_temperature", o.NozzleTemperature, "235"},
+		{"nozzle_temperature_initial_layer", o.NozzleTemperatureInitialLayer, "240"},
+		{"hot_plate_temp", o.HotPlateTemp, "85"},
+		{"hot_plate_temp_initial_layer", o.HotPlateTempInitialLayer, "90"},
+		{"textured_plate_temp", o.TexturedPlateTemp, "85"},
+		{"textured_plate_temp_initial_layer", o.TexturedPlateTempInitialLayer, "90"},
+		{"filament_flow_ratio", o.FilamentFlowRatio, "0.95"},
+		{"filament_max_volumetric_speed", o.FilamentMaxVolumetricSpeed, "11.5"},
+		{"filament_diameter", o.FilamentDiameter, "2.85"},
+		{"filament_density", o.FilamentDensity, "1.24"},
+		{"filament_cost", o.FilamentCost, "27.5"},
+		{"required_nozzle_HRC", o.RequiredNozzleHRC, "40"},                             // abrasive → the hardened-steel threshold
+		{"filament_shrinkage_compensation_z", o.FilamentShrinkageCompensationZ, "98%"}, // same key, inverted meaning
+		{"fan_min_speed", o.FanMinSpeed, "35"},                                         // word order swaps, the percent survives the ratio hop
+		{"fan_max_speed", o.FanMaxSpeed, "90"},
+		{"overhang_fan_speed", o.OverhangFanSpeed, "65"},
+		{"close_fan_the_first_x_layers", o.CloseFanTheFirstXLayers, "2"},
+		{"full_fan_speed_layer", o.FullFanSpeedLayer, "4"},
+		{"slow_down_layer_time", o.SlowDownLayerTime, "12.5"},
+		{"slow_down_min_speed", o.SlowDownMinSpeed, "17"},
+		{"filament_wipe", o.FilamentWipe, "0"}, // authored off, never mistaken for the "nil" inherit
+		{"filament_vendor", o.FilamentVendor, "Forward AM"},
+		{"default_filament_colour", o.DefaultFilamentColour, "#F7F7F7"}, // bare in canonical, prefixed again on the wire
+		{"filament_notes", o.FilamentNotes, "Line one\nLine two"},
+		{"filament_start_gcode", o.FilamentStartGcode, "M900 K{if nozzle_diameter[0]==0.6}0.12{else}0.2{endif}\nM572 S0.36"}, // opaque: Prusa macros travel as-is
+		{"filament_end_gcode", o.FilamentEndGcode, "; Filament-specific end gcode"},
+	} {
+		if len(c.got) != 1 || c.got[0] != c.want {
+			t.Errorf("orca %s = %v, want [%s]", c.key, c.got, c.want)
+		}
+	}
+}
+
+// Spec story 8: a retraction override left to inherit in PrusaSlicer must
+// still inherit in Orca. Ingest reads "nil" as canonical nil and the Orca
+// render spells nil back as "nil" — a machine default never gets frozen into
+// the filament. The authored neighbours prove the family is not simply
+// dropped.
+func TestPrusaRetractionInheritSurvivesToOrca(t *testing.T) {
+	bundle := "[filament:Retract]\n" +
+		"filament_retract_length = nil\n" +
+		"filament_retract_lift = nil\n" +
+		"filament_wipe = nil\n" +
+		"filament_retract_speed = 40\n" +
+		"filament_deretract_speed = 25\n"
+	results, err := prusa.Ingest([]byte(bundle))
+	if err != nil || len(results) != 1 || results[0].Err != nil {
+		t.Fatalf("prusa.Ingest: err=%v results=%+v", err, results)
+	}
+	o, _, err := orca.RenderFilament(*results[0].Filament, mini)
+	if err != nil {
+		t.Fatalf("orca.RenderFilament: %v", err)
+	}
+	for _, c := range []struct {
+		key  string
+		got  []string
+		want string
+	}{
+		{"filament_retraction_length", o.FilamentRetractionLength, "nil"},
+		{"filament_z_hop", o.FilamentZHop, "nil"},
+		{"filament_wipe", o.FilamentWipe, "nil"},
+		{"filament_retraction_speed", o.FilamentRetractionSpeed, "40"},
+		{"filament_deretraction_speed", o.FilamentDeretractionSpeed, "25"},
+	} {
+		if len(c.got) != 1 || c.got[0] != c.want {
+			t.Errorf("orca %s = %v, want [%s]", c.key, c.got, c.want)
+		}
+	}
+}
+
+// Pitfall #14 (docs/mapping.md) end to end: the same shrink intent crosses
+// from Prusa's rate spelling to Orca's inverted one through canonical.
+func TestPrusaShrinkIngestRendersToOrca(t *testing.T) {
+	for _, c := range []struct {
+		prusa string
+		rate  float64
+		orca  string
+	}{
+		{"2%", 0.02, "98%"},
+		{"0%", 0.0, "100%"},
+	} {
+		t.Run(c.prusa, func(t *testing.T) {
+			bundle := "[filament:Shrink]\nfilament_shrinkage_compensation_xy = " + c.prusa + "\n"
+			results, err := prusa.Ingest([]byte(bundle))
+			if err != nil || len(results) != 1 || results[0].Err != nil {
+				t.Fatalf("prusa.Ingest: err=%v results=%+v", err, results)
+			}
+			got := results[0].Filament.Physical.ShrinkageXY
+			if got == nil {
+				t.Fatalf("canonical shrinkage_xy = nil, want %v", c.rate)
+			}
+			if *got != c.rate {
+				t.Fatalf("canonical shrinkage_xy = %v, want %v", *got, c.rate)
+			}
+			o, _, err := orca.RenderFilament(*results[0].Filament, mini)
+			if err != nil {
+				t.Fatalf("orca.RenderFilament: %v", err)
+			}
+			if len(o.FilamentShrink) != 1 || o.FilamentShrink[0] != c.orca {
+				t.Errorf("orca filament_shrink = %v, want [%s]", o.FilamentShrink, c.orca)
+			}
+		})
+	}
+}
+
+// A shrink rate renders on both sides without rounding to a whole percent:
+// both wire keys are float percents (coPercents in each slicer's
+// PrintConfig.cpp), so "1.5%" is expressible and rounding it to "2%" would be
+// a silent loss. Expected strings are clean decimals: float noise from the
+// ×100 or the Orca inversion (1−0.07 = 0.9299999999999999) must not leak.
+func TestShrinkRendersExactOnBoth(t *testing.T) {
+	for _, c := range []struct {
+		rate  float64
+		prusa string
+		orca  string
+	}{
+		{0.0, "0%", "100%"},
+		{0.02, "2%", "98%"},
+		{0.07, "7%", "93%"},
+		{0.015, "1.5%", "98.5%"},
+		{0.007, "0.7%", "99.3%"},
+		{-0.005, "-0.5%", "100.5%"},
+	} {
+		t.Run(fmt.Sprint(c.rate), func(t *testing.T) {
+			f := base()
+			f.Physical.ShrinkageXY = new(c.rate)
+			o, p := render(t, f)
+			if got := p["filament_shrinkage_compensation_xy"]; got != c.prusa {
+				t.Errorf("prusa filament_shrinkage_compensation_xy = %q, want %q", got, c.prusa)
+			}
+			if len(o.FilamentShrink) != 1 || o.FilamentShrink[0] != c.orca {
+				t.Errorf("orca filament_shrink = %v, want [%s]", o.FilamentShrink, c.orca)
+			}
+		})
+	}
+}
+
+// Shrinkage Z shares one key name across the two slicers with opposite
+// meanings (docs/mapping.md pitfall #14): Prusa's rate, Orca's size.
+func TestShrinkZRendersInvertedOnOrca(t *testing.T) {
+	f := base()
+	f.Physical.ShrinkageZ = new(0.015)
+	o, p := render(t, f)
+	if got := p["filament_shrinkage_compensation_z"]; got != "1.5%" {
+		t.Errorf("prusa filament_shrinkage_compensation_z = %q, want %q", got, "1.5%")
+	}
+	if len(o.FilamentShrinkageCompensationZ) != 1 || o.FilamentShrinkageCompensationZ[0] != "98.5%" {
+		t.Errorf("orca filament_shrinkage_compensation_z = %v, want [98.5%%]", o.FilamentShrinkageCompensationZ)
+	}
+}
+
+// Ingest agnosticism: one cooling intent, spelled in each slicer's own
+// dialect (swapped word order, bridge vs overhang, renamed layer keys), must
+// land as the SAME canonical from both ingests. The render-side king test
+// cannot see a decode that drifts on one side only.
+func TestCoolingIngestAgreesAcrossProviders(t *testing.T) {
+	orcaJSON := `{"name": "Cool",
+		"fan_min_speed": ["35"], "fan_max_speed": ["90"], "overhang_fan_speed": ["65"],
+		"close_fan_the_first_x_layers": ["2"], "full_fan_speed_layer": ["4"],
+		"slow_down_layer_time": ["12.5"], "slow_down_min_speed": ["17"]}`
+	prusaINI := "[filament:Cool]\n" +
+		"min_fan_speed = 35\n" +
+		"max_fan_speed = 90\n" +
+		"bridge_fan_speed = 65\n" +
+		"disable_fan_first_layers = 2\n" +
+		"full_fan_speed_layer = 4\n" +
+		"slowdown_below_layer_time = 12.5\n" +
+		"min_print_speed = 17\n"
+
+	fromOrca, _, err := orca.IngestFilament([]byte(orcaJSON))
+	if err != nil {
+		t.Fatalf("orca.IngestFilament: %v", err)
+	}
+	results, err := prusa.Ingest([]byte(prusaINI))
+	if err != nil || len(results) != 1 || results[0].Err != nil {
+		t.Fatalf("prusa.Ingest: err=%v results=%+v", err, results)
+	}
+	fromPrusa := results[0].Filament
+
+	want := canonical.Cooling{
+		FanMin:              new(0.35),
+		FanMax:              new(0.90),
+		FanOffFirstLayers:   new(2),
+		FullFanAtLayer:      new(4),
+		SlowDownLayerTimeS:  new(12.5),
+		SlowDownMinSpeedMMS: new(17.0),
+		BridgesFan:          new(0.65),
+	}
+	if !reflect.DeepEqual(fromOrca.Cooling, want) {
+		t.Errorf("orca cooling = %s, want %s", coolingString(fromOrca.Cooling), coolingString(want))
+	}
+	if !reflect.DeepEqual(fromPrusa.Cooling, want) {
+		t.Errorf("prusa cooling = %s, want %s", coolingString(fromPrusa.Cooling), coolingString(want))
+	}
+}
+
+// coolingString derefs the pointers so a mismatch prints values, not addresses.
+func coolingString(c canonical.Cooling) string {
+	d := func(p any) string {
+		switch v := p.(type) {
+		case *float64:
+			if v != nil {
+				return fmt.Sprint(*v)
+			}
+		case *int:
+			if v != nil {
+				return fmt.Sprint(*v)
+			}
+		}
+		return "nil"
+	}
+	return fmt.Sprintf("{min %s max %s off %s full %s time %s speed %s bridge %s}",
+		d(c.FanMin), d(c.FanMax), d(c.FanOffFirstLayers), d(c.FullFanAtLayer),
+		d(c.SlowDownLayerTimeS), d(c.SlowDownMinSpeedMMS), d(c.BridgesFan))
+}

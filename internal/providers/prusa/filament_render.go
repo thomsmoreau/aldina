@@ -17,7 +17,6 @@ package prusa
 // Wire encoding (quoting, escaping, list vs scalar): ini.go.
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/thomsmoreau/Aldina/internal/canonical"
@@ -67,7 +66,7 @@ func renderShrink(rate *float64) string {
 	if rate == nil {
 		return ""
 	}
-	return providers.RatioToPercent(*rate) + "%"
+	return providers.RatioToExactPercent(*rate) + "%"
 }
 
 // inheritFloatPtr renders a filament-level retraction override: nil = "inherit
@@ -107,29 +106,6 @@ func gcodeBlob(p *string) []string {
 	return one(*p)
 }
 
-// mapMaterialToPrusa maps the canonical enum to Prusa's vocabulary. The second
-// return is a loss warning ("" when exact), collected by the caller — never a
-// silent substitution.
-//
-// Values are the ones PrusaSlicer itself defines for filament_type
-// (PrintConfig): PLA, PET, ABS, ASA, FLEX, HIPS, EDGE, NGEN, PA, NYLON, PVA,
-// PC, PP, PEI, PEEK, PEKK, POM, PSU, PVDF, SCAFF. Anything outside that list is
-// not free-form: the GUI would show it as unknown.
-func mapMaterialToPrusa(m canonical.Material) (string, string) {
-	switch m {
-	case canonical.PETG:
-		return "PET", "" // same family, different name — the vocabulary trap
-	case canonical.TPU:
-		return "FLEX", ""
-	case canonical.PHA:
-		return "PLA", "meta.material: PHA unknown to prusa, rendered as PLA"
-	case canonical.PLA, canonical.ABS, canonical.ASA, canonical.PC, canonical.PA:
-		return string(m), ""
-	default:
-		return string(m), fmt.Sprintf("meta.material: %q not in prusa's filament_type list, passed through", m)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Assembly
 // ---------------------------------------------------------------------------
@@ -143,7 +119,7 @@ func mapMaterialToPrusa(m canonical.Material) (string, string) {
 //
 // Loss policy: a canonical field Prusa cannot express becomes a warning,
 // never a silent drop.
-func RenderFilament(f canonical.Filament) (FilamentSettings, []string, error) {
+func RenderFilament(f canonical.Filament) (FilamentSettings, []providers.Warning, error) {
 	if err := providers.MissingError(filamentKind, requiredFilament(f)); err != nil {
 		return FilamentSettings{}, nil, err
 	}
@@ -154,29 +130,32 @@ func RenderFilament(f canonical.Filament) (FilamentSettings, []string, error) {
 		return FilamentSettings{}, nil, err
 	}
 
-	var warns []string
+	var warns []providers.Warning
 
-	var filamentType string
+	var filamentType []string
 	if f.Meta.Material == nil {
-		warns = append(warns, "meta.material: absent, filament_type omitted (slicer default applies)")
+		warns = append(warns, providers.Warning{Path: "meta.material", Message: "absent, filament_type omitted (slicer default applies)"})
 	} else {
-		mapped, warn := mapMaterialToPrusa(*f.Meta.Material)
-		if warn != "" {
-			warns = append(warns, warn)
+		mapped, loss := mapMaterialToPrusa(*f.Meta.Material)
+		if loss != "" {
+			warns = append(warns, providers.Warning{Path: "meta.material", Message: loss})
 		}
-		filamentType = mapped
+		filamentType = one(mapped)
 	}
 
 	// Canonical concepts with no Prusa field at all. Collected here rather than
 	// scattered so the loss list stays readable and provably complete.
 	if f.Temps.NozzleRange != nil {
-		warns = append(warns, "temps.nozzle_range: no prusa field, dropped (orca renders it)")
+		warns = append(warns, providers.Warning{Path: "temps.nozzle_range", Message: "no prusa field, dropped (orca renders it)"})
 	}
 	if f.Temps.Softening != nil {
-		warns = append(warns, "temps.softening: no prusa field, dropped (orca renders temperature_vitrification)")
+		warns = append(warns, providers.Warning{Path: "temps.softening", Message: "no prusa field, dropped (orca renders temperature_vitrification)"})
 	}
 	if f.Retraction.WipeDistanceMM != nil {
-		warns = append(warns, "retraction.wipe_distance_mm: no prusa filament override, dropped")
+		warns = append(warns, providers.Warning{Path: "retraction.wipe_distance_mm", Message: "no prusa filament override, dropped"})
+	}
+	if len(f.Overrides["orca"]) > 0 {
+		warns = append(warns, providers.Warning{Path: "overrides.orca", Message: "orca-only pass-through, not rendered"})
 	}
 
 	var colour string

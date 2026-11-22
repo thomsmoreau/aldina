@@ -1,0 +1,52 @@
+kind: filament
+schema_version: 1
+meta:
+    name: Ultrafuse PET @MINI - Detached
+    vendor: Forward AM
+    material: PETG
+    color_hex: F7F7F7
+    notes: |-
+        Material Description
+        Ultrafuse PET is made from a premium PET and prints as easy as PLA, but is much stronger. The filament has a large operating window for printing (temperature vs. speed), so it can be used on every 3D-printer. PET will give you outstanding printing results: a good layer adhesion, a high resolution and it is easy to handle. Ultrafuse PET can be 100% recycled, is watertight and has great colors and finish.
+
+        Printing Recommendations:
+        Ultrafuse PET can be printed directly onto a clean build plate. For challenging prints, use 3dLac to improve adhesion.
+physical:
+    diameter_mm: 1.75
+    density_g_cm3: 1.33
+    cost_per_kg: 0
+    abrasive: false
+    shrinkage_xy: 0
+    shrinkage_z: 0
+temps:
+    nozzle: 215
+    nozzle_first_layer: 220
+    bed: 70
+    bed_first_layer: 70
+flow:
+    max_volumetric_mm3_s: 8
+    flow_ratio: 1
+cooling:
+    fan_min: 0.75
+    fan_max: 1
+    fan_off_first_layers: 1
+    full_fan_at_layer: 0
+    slow_down_layer_time_s: 15
+    slow_down_min_speed_mm_s: 15
+    bridges_fan: 1
+retraction:
+    speed_mm_s: 45
+    deretract_speed_mm_s: 25
+    wipe: false
+gcode:
+    start: |-
+        M900 K{if nozzle_diameter[0]==0.6}0.12{elsif nozzle_diameter[0]==0.8}0.06{else}0.2{endif} ; Filament gcode
+
+        {if printer_notes=~/.*PRINTER_MODEL_MINIIS.*/}
+        M572 S{if nozzle_diameter[0]==0.6}0.22{elsif nozzle_diameter[0]==0.8}0.15{elsif nozzle_diameter[0]==0.4}0.36{elsif nozzle_diameter[0]==0.25}1.02{else}0{endif}
+        {endif}
+    end: ; Filament-specific end gcode
+compat: {}
+overrides:
+    prusa:
+        compatible_printers_condition: printer_notes=~/.*PRINTER_MODEL_MINI.*/

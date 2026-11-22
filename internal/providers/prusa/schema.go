@@ -49,7 +49,7 @@ type FilamentIdentity struct {
 	FilamentSettingsID []string `ini:"filament_settings_id"` // renders as "" when empty
 	Inherits           string   `ini:"inherits"`             // empty on detached exports
 	FilamentVendor     string   `ini:"filament_vendor"`      // unquoted, may contain spaces
-	FilamentType       string   `ini:"filament_type"`        // "PET" = PETG family (vocab!)
+	FilamentType       []string `ini:"filament_type"`        // coStrings, one per extruder; "PET" = PETG family (vocab!)
 	FilamentColour     string   `ini:"filament_colour"`      // "#RRGGBB" unquoted — '#' trap
 	FilamentNotes      []string `ini:"filament_notes"`       // quoted, \n-escaped
 	CustomParameters   string   `ini:"custom_parameters_filament"`
@@ -57,7 +57,7 @@ type FilamentIdentity struct {
 
 // FilamentPhysical — physical properties of the material.
 type FilamentPhysical struct {
-	FilamentDiameter                []string `ini:"filament_diameter"` // per-extruder in bundles; single in detached
+	FilamentDiameter                []string `ini:"filament_diameter"` // coFloats: one value in a [filament:] section; ","-joined per extruder only in a whole-config export
 	FilamentDensity                 []string `ini:"filament_density"`
 	FilamentCost                    []string `ini:"filament_cost"`
 	FilamentSpoolWeight             []string `ini:"filament_spool_weight"`

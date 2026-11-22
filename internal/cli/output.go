@@ -11,11 +11,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
+	"github.com/thomsmoreau/Aldina/internal/providers"
 	"github.com/thomsmoreau/Aldina/internal/providers/prusa"
 )
 
-func printWarnings(w io.Writer, warnings []string) {
+// printWarnings takes both shapes because canonical cannot import providers:
+// CheckCompat stays []string, renders return providers.Warning, and both
+// print as the same "warning: path: message" line.
+func printWarnings[W string | providers.Warning](w io.Writer, warnings []W) {
 	for _, warning := range warnings {
 		fmt.Fprintf(w, "warning: %s\n", warning)
 	}
@@ -23,9 +28,11 @@ func printWarnings(w io.Writer, warnings []string) {
 
 // writePreset is everything the two wire formats share: the preset name comes
 // from user YAML and becomes a file name, so it is checked before it can
-// escape outDir.
+// escape outDir — and a stdout line, so a control character (a newline from
+// a YAML block scalar) must not split the one-path-per-line output.
 func writePreset(outDir, presetName, ext string, data []byte, stdout io.Writer) error {
-	if presetName == "" || strings.ContainsAny(presetName, `/\\`) || presetName == "." || presetName == ".." {
+	if presetName == "" || strings.ContainsAny(presetName, `/\\`) || presetName == "." || presetName == ".." ||
+		strings.IndexFunc(presetName, unicode.IsControl) >= 0 {
 		return fmt.Errorf("unsafe preset name %q", presetName)
 	}
 	if err := os.MkdirAll(outDir, 0755); err != nil {
@@ -36,7 +43,9 @@ func writePreset(outDir, presetName, ext string, data []byte, stdout io.Writer) 
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
-	fmt.Fprintln(stdout, path)
+	if _, err := fmt.Fprintln(stdout, path); err != nil {
+		return fmt.Errorf("report %s: %w", path, err)
+	}
 	return nil
 }
 

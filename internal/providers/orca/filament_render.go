@@ -12,6 +12,7 @@ package orca
 import (
 	"fmt"
 	"hash/fnv"
+	"math/big"
 	"slices"
 	"strconv"
 
@@ -110,7 +111,20 @@ func renderShrink(rate *float64) []string {
 	if rate == nil {
 		return nil
 	}
-	return broadcast(providers.RatioToPercent(1.0-*rate) + "%")
+	return broadcast(invertPercent(providers.RatioToExactPercent(*rate)) + "%")
+}
+
+// invertPercent turns a shrink percent into Orca's size percent, 100 − p, on
+// the exact decimal: in float64, 1 − 0.07 is 0.9299999999999999. A
+// non-decimal p (±Inf, NaN) passes through the float path.
+func invertPercent(p string) string {
+	d, ok := new(big.Rat).SetString(p)
+	if !ok {
+		v, _ := strconv.ParseFloat(p, 64)
+		return providers.FormatFloat(100 - v)
+	}
+	f, _ := d.Sub(big.NewRat(100, 1), d).Float64()
+	return providers.FormatFloat(f)
 }
 
 // renderFloatPtr renders a *float64: nil → "nil" (inherit machine), else the value.
@@ -143,8 +157,8 @@ func renderBoolPtr(p *bool) []string {
 // warnings through return values keeps every helper pure.
 // Callers MUST guarantee f.Meta.Name != nil (RenderFilament's guard): it is
 // the one canonical field without which no importable Orca file exists.
-func renderFilamentIdentity(f canonical.Filament, target canonical.MachineRef) (FilamentIdentity, []string) {
-	var warns []string
+func renderFilamentIdentity(f canonical.Filament, target canonical.MachineRef) (FilamentIdentity, []providers.Warning) {
+	var warns []providers.Warning
 	// The suffix is a LABEL, the canonical reference verbatim: it no longer
 	// has to match a preset in Orca's catalogue, which is the coupling this
 	// slice removed.
@@ -152,11 +166,11 @@ func renderFilamentIdentity(f canonical.Filament, target canonical.MachineRef) (
 
 	var filamentType []string
 	if f.Meta.Material == nil {
-		warns = append(warns, "meta.material: absent, filament_type omitted (slicer default applies)")
+		warns = append(warns, providers.Warning{Path: "meta.material", Message: "absent, filament_type omitted (slicer default applies)"})
 	} else {
-		material, warn := mapMaterialToOrca(*f.Meta.Material)
-		if warn != "" {
-			warns = append(warns, warn)
+		material, loss := mapMaterialToOrca(*f.Meta.Material)
+		if loss != "" {
+			warns = append(warns, providers.Warning{Path: "meta.material", Message: loss})
 		}
 		filamentType = broadcast(material)
 	}
@@ -176,8 +190,8 @@ func renderFilamentIdentity(f canonical.Filament, target canonical.MachineRef) (
 }
 
 // mapMaterialToOrca maps the canonical enum to Orca vocabulary. The second
-// return is a loss warning ("" when the mapping is exact) — collected by the
-// caller into RenderFilament's warns, never a silent drop.
+// return is a loss message ("" when the mapping is exact) — the caller, which
+// knows the path, collects it into RenderFilament's warns, never a silent drop.
 // (Prusa's version of this maps PETG → "PET": same concept, two vocabularies.)
 func mapMaterialToOrca(m canonical.Material) (string, string) {
 	// Orca happens to match the canonical names for common materials,
@@ -187,7 +201,7 @@ func mapMaterialToOrca(m canonical.Material) (string, string) {
 	case canonical.PETG:
 		return "PETG", ""
 	case canonical.PHA:
-		return "PLA", "meta.material: PHA unsupported by orca, rendered as PLA"
+		return "PLA", "PHA unsupported by orca, rendered as PLA"
 	default:
 		return string(m), ""
 	}
@@ -280,7 +294,7 @@ func renderRetractionOverrides(r canonical.Retraction) FilamentRetraction {
 // yields drive compatible_printers, and the reference itself labels the preset.
 // Loss policy: fields the canon carries but Orca can't express → collect
 // warnings (returned to the CLI), never drop silently.
-func RenderFilament(canonicalFilament canonical.Filament, target canonical.MachineRef) (FilamentSettings, []string, error) {
+func RenderFilament(canonicalFilament canonical.Filament, target canonical.MachineRef) (FilamentSettings, []providers.Warning, error) {
 	// Canonical fields Orca cannot import without (see required.go). Checked
 	// here so a library caller cannot reach the renderers with a nil name.
 	if err := providers.MissingError(filamentKind, requiredFilament(canonicalFilament)); err != nil {
@@ -313,6 +327,8 @@ func RenderFilament(canonicalFilament canonical.Filament, target canonical.Machi
 			TemperatureVitrification: broadcastFloatPtr(canonicalFilament.Temps.Softening),
 			// shrink: canonical RATE 0.0 → Orca "100%" (size ratio — inverted encodings!)
 			FilamentShrink: renderShrink(canonicalFilament.Physical.ShrinkageXY),
+			// same key name as Prusa's, inverted meaning (pitfall #14)
+			FilamentShrinkageCompensationZ: renderShrink(canonicalFilament.Physical.ShrinkageZ),
 		},
 		FilamentFlow: FilamentFlow{
 			FilamentMaxVolumetricSpeed: broadcastFloatPtr(canonicalFilament.Flow.MaxVolumetricMM3S),
@@ -324,9 +340,20 @@ func RenderFilament(canonicalFilament canonical.Filament, target canonical.Machi
 		},
 	}
 
-	if canonicalFilament.Physical.Abrasive != nil && *canonicalFilament.Physical.Abrasive {
-		// canonical bool → Orca hardness scale: minimal honest mapping
-		out.RequiredNozzleHRC = broadcast("55")
+	if abrasive := canonicalFilament.Physical.Abrasive; abrasive != nil {
+		if *abrasive {
+			// canonical bool → Orca hardness scale. "40" is the value Orca's own
+			// abrasive filaments carry (measured across 7053 system presets);
+			// "55" was invented and matched nothing in the real data.
+			out.RequiredNozzleHRC = broadcast("40")
+		} else {
+			// Orca's library carries HRC "0" on abrasive filaments too, so ingest
+			// reads a low value as unknown (parseOrcaAbrasive): false cannot round-trip.
+			warns = append(warns, providers.Warning{Path: "physical.abrasive", Message: "false has no orca encoding, required_nozzle_HRC omitted (reads back as unknown)"})
+		}
+	}
+	if len(canonicalFilament.Overrides["prusa"]) > 0 {
+		warns = append(warns, providers.Warning{Path: "overrides.prusa", Message: "prusa-only pass-through, not rendered"})
 	}
 
 	// TODO overrides: inject f.Overrides["orca"] as raw JSON fields on top

@@ -103,6 +103,9 @@ const (
 
 type index struct {
 	byModel map[Slicer]map[string][]Machine
+	// byPreset reverses byModel for the ingest direction: a preset name maps
+	// back to the machine that owns it.
+	byPreset map[Slicer]map[string]Machine
 	// alias maps a model name to its counterpart in the other catalogue.
 	alias map[string]string
 	// pairs keeps aliases.json in file order, for the tests that check it
@@ -129,13 +132,23 @@ var loaded = sync.OnceValue(func() *index {
 			Orca:  make(map[string][]Machine),
 			Prusa: make(map[string][]Machine),
 		},
+		byPreset: map[Slicer]map[string]Machine{
+			Orca:  make(map[string]Machine),
+			Prusa: make(map[string]Machine),
+		},
 		alias: make(map[string]string, 2*len(aliases.Aliases)),
 	}
 	for _, m := range snap.Orca {
 		idx.byModel[Orca][m.Model] = append(idx.byModel[Orca][m.Model], m)
+		for _, p := range m.Presets {
+			idx.byPreset[Orca][p] = m
+		}
 	}
 	for _, m := range snap.Prusa {
 		idx.byModel[Prusa][m.Model] = append(idx.byModel[Prusa][m.Model], m)
+		for _, p := range m.Presets {
+			idx.byPreset[Prusa][p] = m
+		}
 	}
 	// Equivalence is symmetric: the author may write either spelling.
 	for _, a := range aliases.Aliases {
@@ -231,6 +244,16 @@ func unknownModelError(idx *index, s Slicer, model string) error {
 	return fmt.Errorf("%q is in neither catalogue (checked %s): "+
 		"check the spelling against the slicer's printer list, or regenerate the "+
 		"snapshot with `go run ./cmd/aldina-catalog` if the machine is newer than it", model, s)
+}
+
+// LookupPreset resolves a preset name back to its machine. It is the ingest
+// direction of Lookup: where Lookup answers "which preset names this machine",
+// LookupPreset answers "which machine owns this preset name". The second return
+// is false when the name is in no preset list.
+func LookupPreset(s Slicer, preset string) (Machine, bool) {
+	idx := loaded()
+	m, ok := idx.byPreset[s][preset]
+	return m, ok
 }
 
 // Models lists every model name known to a slicer, sorted. Used by the tests
